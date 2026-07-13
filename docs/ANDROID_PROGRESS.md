@@ -1,5 +1,84 @@
 # Progresso Android
 
+## 2026-07-13 — Correção: recursão RLS em clinic_members (42P17) + paleta escura nativa
+
+### 42P17 — infinite recursion detected in policy for relation "clinic_members"
+
+**Causa raiz confirmada (não presumida):** a policy `"Gestão de membros da clínica"`
+(criada em `0001_initial_schema.sql`) usava, na própria cláusula `USING`, um
+`EXISTS (SELECT 1 FROM public.clinic_members cm WHERE ...)` — uma subquery contra a MESMA
+tabela que a policy protege. Para qualquer role que não seja dona da tabela (ex.:
+`authenticated`, usado pelo app real), essa subquery interna também está sujeita a RLS, o
+que força reavaliar a mesma policy de novo, indefinidamente. Isso não apareceu nas minhas
+validações anteriores porque a conexão do MCP usa a role `postgres` (dona da tabela,
+`relforcerowsecurity=false`), que contorna RLS por padrão independente das policies —
+confirmado via `pg_class`/`current_setting('is_superuser')` (`is_superuser = off`, mas
+`table_owner = postgres = current_user`).
+
+**Prova de causa e efeito (mesma query, antes e depois):**
+```sql
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims', json_build_object('sub','<uuid_real>','role','authenticated')::text, true);
+select * from public.clinic_members;
+rollback;
+```
+- **Antes** da correção: `ERROR: 42P17: infinite recursion detected in policy for relation "clinic_members"`.
+- **Depois** da correção: sem erro, `auth.uid()` resolvido corretamente, `count(*) = 0`
+  linhas (tabela vazia).
+
+**Correção aplicada** (`supabase/migrations/0002_fix_clinic_members_rls_recursion.sql`,
+via `apply_migration`): nova função `public.is_clinic_manager(_user_id uuid, _clinic_id uuid)`
+(`SECURITY DEFINER`, `search_path = public`, mesmo padrão de `has_role`/`is_clinic_member`/
+`has_clinic_role`) — executa com o privilégio do dono da tabela, então a consulta interna a
+`clinic_members` dentro dela não reaciona RLS, quebrando o ciclo. `EXECUTE` restrito a
+`authenticated` (revogado de `public`/`anon`). A policy recursiva foi substituída para
+chamar essa função em vez do `EXISTS` direto; a policy pública de leitura
+(`"Membros de clínica são públicos"`, `is_active = true`) não mudou — nunca foi recursiva.
+
+**Limitação honesta, não contornada:** `clinic_members` está com **0 linhas** no projeto
+(nenhum staff/clínica vinculado ainda). Não é possível provar isolamento entre clínicas
+(teste positivo "vejo meu vínculo" / negativo "não vejo o de outra clínica") sem dados reais
+de mais de um vínculo — e não fabriquei esses dados só para o teste passar. Fica pendente
+validar isolamento assim que houver pelo menos 2 `clinic_members` reais (ex.: ao cadastrar a
+primeira clínica e vincular staff via `MasterClinicas`/admin).
+
+### Paleta escura persistente (causa diferente da sessão anterior)
+
+A sessão anterior corrigiu `TutIoTheme.kt` (parou de seguir `isSystemInDarkTheme()`) e as
+system bars via `WindowCompat` em `MainActivity.kt` — mas isso só cobre o Compose. O tema
+NATIVO pré-Compose (`app/src/main/res/values/themes.xml`, `Theme.TutIo` com
+`parent="Theme.Material3.DayNight.NoActionBar"`) continuava resolvendo
+`app/src/main/res/values-night/themes.xml` + `values-night/colors.xml` quando o sistema
+está em modo escuro — isso define a cor de fundo da Window e o status bar ANTES do primeiro
+frame do Compose, independentemente do `TutIoTheme` do Compose. `values-night/colors.xml`
+tinha `tutio_native_background = #111822` (escuro real), causando a paleta escura
+percebida mesmo após a correção anterior.
+
+**Corrigido:** `values-night/colors.xml` e `values-night/themes.xml` agora espelham
+`values/` (mesmas cores claras, `windowLightStatusBar=true`), e ambos os `themes.xml`
+ganharam `android:forceDarkAllowed="false"` (`tools:targetApi="q"`). Nenhum outro
+composable desenha fora do escopo de `TutIoTheme`/`MaterialTheme` — todas as ~50 telas
+(incluindo estados de carregamento/erro em `TutStateComposables.kt`) consomem
+`TutIoTheme.colors`/`MaterialTheme.colorScheme` via composition local, confirmado por
+varredura completa do código-fonte.
+
+### Como foi validado
+- `pg_policies`/`pg_class` antes e depois da correção (evidência acima).
+- Teste transacional como `authenticated` com UUID real, em uma única chamada
+  `execute_sql` (`begin`...`rollback`), antes e depois — erro reproduzido, depois eliminado.
+- `gradlew.bat clean assembleDebug` → `BUILD SUCCESSFUL in 5m 42s` (522 tasks).
+- **Não testado visualmente no aparelho**: havia 1 dispositivo conectado (`RQCR700H63J`)
+  antes do build; desconectou durante os ~6 min de build e não voltou a aparecer em
+  `adb devices` depois. Instalação/teste de comportamento visual real ficam pendentes —
+  não afirmo que o app "abre com paleta clara no aparelho" porque não observei isso, só que
+  o build compila e a causa raiz identificada foi corrigida no código-fonte.
+
+### Pendências reais
+1. Reinstalar e abrir o app no aparelho físico quando reconectado, confirmar visualmente
+   paleta clara e ausência de 42P17 no fluxo de login real.
+2. Validar isolamento entre clínicas em `clinic_members` assim que houver ≥2 vínculos reais.
+
 ## 2026-07-13 — Bootstrap do schema Supabase (projeto novo, causa raiz do PGRST205)
 
 ### Contexto

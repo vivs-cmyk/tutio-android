@@ -1,0 +1,13 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Tema nativo pré-Compose (janela/status bar antes do 1o frame). Tema claro é o
+         padrão fixo do produto (ver values/themes.xml) — este arquivo existe só para
+         values-night NÃO herdar um tema escuro do sistema por omissão; espelha
+         intencionalmente values/themes.xml em vez de definir uma variante escura real. -->
+    <style name="Theme.TutIo" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/tutio_native_primary</item>
+        <item name="colorOnPrimary">@color/tutio_native_on_primary</item>
+        <item name="android:colorBackground">@color/tutio_native_background</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
+    </style>
+</resources>

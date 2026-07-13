@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tema claro é o padrão fixo do produto (ver TutIoTheme.kt) — o app ainda não aplica
+         tema escuro automático, então values-night espelha values/colors.xml de propósito,
+         em vez de resolver cores escuras via DayNight do sistema. -->
+    <color name="tutio_native_background">#F8FCF9</color>
+    <color name="tutio_native_primary">#09B6CE</color>
+    <color name="tutio_native_on_primary">#FFFFFF</color>
+    <color name="tutio_native_foreground">#0F1729</color>
+</resources>

@@ -1,0 +1,11 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Tema nativo pré-Compose (janela/status bar antes do 1o frame). Compose (TutIoTheme
+         em core/designsystem) é a fonte de verdade visual a partir daí. -->
+    <style name="Theme.TutIo" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/tutio_native_primary</item>
+        <item name="colorOnPrimary">@color/tutio_native_on_primary</item>
+        <item name="android:colorBackground">@color/tutio_native_background</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
+    </style>
+</resources>
